@@ -78,7 +78,7 @@ def initialize_readers():
 file_extractor = initialize_readers()
 
 # Add a button to load and process documents
-if st.button("Load and Process Documents"):
+if st.button("Load and Process Documents (about 5 min)"):
     with st.spinner("Loading and processing documents..."):
         try:
             # Load documents from FILES directory
