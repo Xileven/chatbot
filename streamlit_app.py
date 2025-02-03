@@ -1,56 +1,173 @@
 import streamlit as st
-from openai import OpenAI
+import nest_asyncio
+nest_asyncio.apply()
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
+import os
+from llama_index.llms.openai import OpenAI
+from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.core import VectorStoreIndex, Settings, Document
+from llama_index.core.node_parser import SentenceSplitter, MarkdownElementNodeParser
+from llama_index.core.schema import TextNode
+from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
+from llama_parse import LlamaParse
+import requests 
+from llama_index.llms.openai import OpenAI
+from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.core import VectorStoreIndex
+from llama_index.core import Settings
+from llama_index.core import SimpleDirectoryReader
+from llama_index.core import Document
+from llama_index.readers.file import (
+    DocxReader,
 )
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+# Set page config
+st.set_page_config(page_title="Domain Knowledge Augmented LLM Demo", layout="wide")
+st.title("Domain Knowledge Augmented LLM Demo")
+st.subheader("BAMA, Feb 2025")
+st.write("""
+This demo is a POC of using Large Language Model(LLM) to interact with user specified documents.
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+Data used in this demo is 2023 Q-10 and 2024 Q-10 of Schwab from public Schwab website.
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
+* [https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10-Q_093023.pdf](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10-Q_093023.pdf)
+* [https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10Q_093024.pdf](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10Q_093024.pdf)
+""")
+
+import dotenv
+dotenv.load_dotenv()
+
+# Set API keys from Streamlit secrets
+os.environ["LLAMA_CLOUD_API_KEY"] = os.getenv("LLAMA_CLOUD_API_KEY")
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+os.environ["PINECONE_API_KEY"] = os.getenv("PINECONE_API_KEY")
+
+# Global Settings
+@st.cache_resource
+def initialize_models():
+    embed_model = OpenAIEmbedding(model="text-embedding-3-small")
+    llm = OpenAI(model="gpt-3.5-turbo-0125")
+    Settings.llm = llm
+    Settings.embed_model = embed_model
+    return llm
+
+llm = initialize_models()
+
+# Initialize parsers
+@st.cache_resource
+def initialize_parsers():
+    return LlamaParse(result_type="markdown")
+
+llama_parser = initialize_parsers()
+
+# Initialize document readers
+@st.cache_resource
+def initialize_readers():
+    llama_parser = LlamaParse(result_type="markdown")    
+    docx_reader = DocxReader()
+    
+    file_extractor = {
+        # Document formats
+        ".pdf": llama_parser,  # Converts PDF to markdown
+        ".docx": docx_reader,
+        ".doc": docx_reader,
+        ".txt": None  # Default reader for text files
+    }
+    return file_extractor
+
+file_extractor = initialize_readers()
+
+# Add a button to load and process documents
+if st.button("Load and Process Documents"):
+    with st.spinner("Loading and processing documents..."):
+        try:
+            # Load documents from FILES directory
+            documents = SimpleDirectoryReader(
+                "./FILES", 
+                file_extractor=file_extractor,
+                filename_as_id=True  
+            ).load_data()
+            
+            if documents:
+                st.session_state.documents = documents
+                st.success(f"Successfully loaded {len(documents)} documents from FILES directory")
+            else:
+                st.warning("No documents found in FILES directory")
+        except Exception as e:
+            st.error(f"Error loading documents: {str(e)}")
+
+# Process documents and create index
+if 'documents' in st.session_state:
+    if 'index_created' not in st.session_state:
+        with st.spinner("Processing documents and creating index..."):
+            # Create nodes using both approaches
+            text_splitter = SentenceSplitter(chunk_size=512, chunk_overlap=100)
+            page_nodes = []
+            for doc in st.session_state.documents:
+                text_chunks = text_splitter.split_text(doc.text)
+                for i, chunk in enumerate(text_chunks):
+                    node = TextNode(
+                        text=chunk,
+                        metadata={
+                            "file_name": doc.metadata.get("file_name", ""),
+                            "chunk_index": i,
+                        }
+                    )
+                    page_nodes.append(node)
+
+            # Parse markdown structure
+            node_parser = MarkdownElementNodeParser(llm=llm, num_workers=8)
+            nodes = node_parser.get_nodes_from_documents(st.session_state.documents)
+            base_nodes, objects = node_parser.get_nodes_and_objects(nodes)
+
+            # Combine all nodes
+            all_nodes = base_nodes + objects + page_nodes
+
+            # Create index
+            recursive_index = VectorStoreIndex(all_nodes, show_progress=True)
+            
+            # Create query engine
+            reranker = FlagEmbeddingReranker(
+                model="BAAI/bge-reranker-large",
+                top_n=3,
+            )
+            
+            recursive_query_engine = recursive_index.as_query_engine(
+                similarity_top_k=5,
+                node_postprocessors=[reranker],
+                verbose=True,
+                synthesize=True
+            )
+            
+            st.session_state.query_engine = recursive_query_engine
+            st.session_state.index_created = True
+            st.success("Index created successfully!")
+
+    # Create the chat interface
+    st.header("Chat with your Documents")
+    
+    # Initialize chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display the existing chat messages via `st.chat_message`.
+    # Display chat messages from history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
-
-        # Store and display the current prompt.
+    # Accept user input
+    if prompt := st.chat_input("Ask a question about your documents"):
+        # Display user message in chat message container
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
-
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
+        # Display assistant response in chat message container
         with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+            with st.spinner("Thinking..."):
+                response = st.session_state.query_engine.query(prompt)
+                st.markdown(response.response)
+                st.session_state.messages.append({"role": "assistant", "content": response.response})
+
+else:
+    st.info("Please load the documents first by clicking the 'Load and Process Documents' button above.")
