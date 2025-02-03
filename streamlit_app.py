@@ -145,7 +145,18 @@ if 'documents' in st.session_state:
 
     # Create the chat interface
     st.header("Chat with your Documents")
-    
+
+    # Display sample questions
+    st.markdown("""
+    **Sample Questions:**
+    ```
+    - Compare Client Metrics from 2023 to 2024, and from 2022 to 2023, in numbers
+    - Compare Client Metrics of Three Month Ended from 2022, to 2023, to 2024, in numbers, and printout in table
+    - Compare Total Net Revenue from 2022, to 2023, to 2024 and printout in table
+    - Compare Net Revenue in each category from 2022, to 2023, to 2024 and printout in table
+    ```
+    """)
+
     # Initialize chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
