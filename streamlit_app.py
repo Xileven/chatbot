@@ -23,15 +23,28 @@ from llama_index.readers.file import (
 
 # Set page config
 st.set_page_config(page_title="Domain Knowledge Augmented LLM Demo", layout="wide")
-st.title("Domain Knowledge Augmented LLM Demo")
-st.subheader("BAMA, Feb 2025")
+st.title("Domain Knowledge Augmented LLM")
+st.subheader("Demo, BAMA, Feb 2025")
+
 st.write("""
-This demo is a POC of using Large Language Model(LLM) to interact with user specified documents.
+##### This demo is a POC of 2 functions
+    
+    1. Using LLM to interact with user specified documents.
+    2. Multiple files can be ingested at the same time
+         
+##### Due to limitation of hardware (memory, storage, API), demo restricted from
+    1. Reasoning(Ambiguous question)
+    2. Sematic question (follow up question)
+    3. Tradeoff between accuracy and response time
+    4. Larger model
+    5. Model tuning (optimization)
+         
+
 
 Data used in this demo is 2023 Q-10 and 2024 Q-10 of Schwab from public Schwab website.
 
-* [https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10-Q_093023.pdf](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10-Q_093023.pdf)
-* [https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10Q_093024.pdf](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10Q_093024.pdf)
+* [SEC 10Q-2023](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10-Q_093023.pdf)
+* [SEC 10Q-2024](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10Q_093024.pdf)
 """)
 
 import dotenv
@@ -78,7 +91,7 @@ def initialize_readers():
 file_extractor = initialize_readers()
 
 # Add a button to load and process documents
-if st.button("Load and Process Documents (about 5 min)"):
+if st.button("[click] Load and Process Documents (about 5 min)"):
     with st.spinner("Loading and processing documents..."):
         try:
             # Load documents from FILES directory
