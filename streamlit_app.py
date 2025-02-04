@@ -27,16 +27,16 @@ st.title("Domain Knowledge Augmented LLM")
 st.subheader("Demo, BAMA, Feb 2025")
 
 st.write("""
-##### This demo is a POC of 2 functions
+##### This demo is a POC of:
     
     1. Using LLM to interact with user specified documents.
     2. Multiple files can be ingested at the same time
          
-##### Due to limitation of hardware (memory, storage, API), demo restricted from
-    1. Reasoning(Ambiguous question)
-    2. Sematic question (follow up question)
-    3. Tradeoff between accuracy and response time
-    4. Larger model
+##### Due to limitation of hardware (memory, storage, API), demo is restricted from
+    1. Reasoning(Ambiguous questions)
+    2. Sematic questioning (follow up questions)
+    3. Accuracy, Tradeoff between accuracy and response time
+    4. Large model (accuracy)
     5. Model tuning (optimization)
          
 
