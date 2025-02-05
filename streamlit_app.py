@@ -36,7 +36,7 @@ st.write("""
     1. Reasoning(Ambiguous questions)
     2. Sematic questioning (follow up questions)
     3. Accuracy, Tradeoff between accuracy and response time
-    4. Large model (accuracy)
+    4. Large model (multiple language and more accuracy)
     5. Model tuning (optimization)
          
 
