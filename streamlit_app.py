@@ -40,6 +40,7 @@ st.write("""
     2. Sematic questioning (follow up questions)
     3. Large model (multiple languages and more accuracy)
     4. Model tuning (optimization)
+    5. Unstable output
          
 
 
