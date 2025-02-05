@@ -21,3 +21,5 @@ openai==1.60.0
 python-dotenv
 requests==2.32.3
 git+https://github.com/FlagOpen/FlagEmbedding.git
+docx2txt
+openpyxl

@@ -19,6 +19,7 @@ from llama_index.core import SimpleDirectoryReader
 from llama_index.core import Document
 from llama_index.readers.file import (
     DocxReader,
+    PandasExcelReader,
 )
 
 # Set page config
@@ -29,7 +30,10 @@ st.subheader("Demo, BAMA, Feb 2025")
 st.write("""
 ##### This demo is a POC of:
     1. LLM interacts with user specified documents.
-    2. Multiple files can be ingested at the same time
+    2. 3 files are ingested at the same time
+         - PDF, Schwab 2024 Q10
+         - Word, Schwab 2023 Q10
+         - Excel, A table extracted from Schwab 2022 K10
          
 ##### Due to limitation of hardware (memory, storage, API), demo is restricted from
     1. Reasoning(Ambiguous questions)
@@ -39,10 +43,10 @@ st.write("""
          
 
 
-Data used in this demo is 2023 Q-10 and 2024 Q-10 of Schwab from public Schwab website.
-
-* [SEC 10Q-2023](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10-Q_093023.pdf)
-* [SEC 10Q-2024](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10Q_093024.pdf)
+* [SEC 10K 2022](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10k_2022.pdf)
+* [SEC 10Q 2023](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10-Q_093023.pdf)
+* [SEC 10Q 2024](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10Q_093024.pdf)
+         
 """)
 
 import dotenv
@@ -82,11 +86,16 @@ def initialize_readers():
         ".pdf": llama_parser,  # Converts PDF to markdown
         ".docx": docx_reader,
         ".doc": docx_reader,
-        ".txt": None  # Default reader for text files
+        ".txt": None,  # Default reader for text files
+        ".xlsx": PandasExcelReader(),  # Excel files (newer format)
+        ".xls": PandasExcelReader(),   # Excel files (older format)
     }
     return file_extractor
 
 file_extractor = initialize_readers()
+
+import glob
+print(f"Files in './FILES': {glob.glob('./FILES/*')}")
 
 # Add a button to load and process documents
 if st.button("[click] Load and Process Documents (about 5 min)"):
@@ -161,10 +170,12 @@ if 'documents' in st.session_state:
     st.markdown("""
     **Sample Questions:**
     ```
+    - [PDF] How Integration of Ameritrade impact client metrics from 2023 to 2024?
+    - [Excel] Where is the headquarters of schwab and what is its size, including leased and owned
+    - [PDF & Word] Compare Total Net Revenue from 2022, to 2023, to 2024 and printout in table
     - Compare Client Metrics from 2023 to 2024, and from 2022 to 2023, in numbers
     - Compare Client Metrics of Three Month Ended from 2022, to 2023, to 2024, in numbers, and printout in table
     - Compare Total Net Revenue from 2022, to 2023, to 2024 and printout in table
-    - Compare Net Revenue in each category from 2022, to 2023, to 2024 and printout in table
     ```
     """)
 
