@@ -307,6 +307,16 @@ if 'documents' in st.session_state:
                                 citation['metadata'] = f"{citation['metadata']} | File: {file_name}"
                         citations.append(citation)
                 
+                # Display citations immediately
+                if citations:
+                    st.markdown('---')
+                    with st.expander("📚 Source Citations"):
+                        for i, citation in enumerate(citations, 1):
+                            st.markdown(f"### Source {i}")
+                            st.markdown(f"**Excerpt:** {citation['text']}")
+                            st.markdown(f"**{citation['metadata']}**")
+                            st.markdown("---")
+                
                 # Add response with citations to messages
                 message = {
                     "role": "assistant",
