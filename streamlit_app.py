@@ -240,9 +240,9 @@ if 'documents' in st.session_state:
     ```
     - [PDF] How Integration of Ameritrade impact client metrics from 2023 to 2024?
     - [Excel] Where is the headquarters of schwab and what is its size, including leased and owned
+    - [PDF & Word] Compare Client Metrics of Three Month Ended from 2022, to 2023, to 2024, in numbers, and printout in table
     - [PDF & Word] Compare Total Net Revenue from 2022, to 2023, to 2024 and printout in table
-    - Compare Client Metrics from 2023 to 2024, and from 2022 to 2023, in numbers
-    - Compare Client Metrics of Three Month Ended from 2022, to 2023, to 2024, in numbers, and printout in table
+    - [Summary] based on Client Metrics of Three Month Ended from 2022, to 2023, to 2024, analyze the business
     - Compare Total Net Revenue from 2022, to 2023, to 2024 and printout in table
     ```
     """)
