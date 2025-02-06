@@ -76,27 +76,57 @@ os.environ["DEEPSEEK_API_KEY"] = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
 
 
+# Model Selection
+llm_model_options = {
+    "GPT-3.5": ("OpenAI", "gpt-3.5-turbo-0125"),
+    "DeepSeek Reasoner": ("DeepSeek", "deepseek-reasoner"),
+    "Gemini": ("Gemini", "models/gemini-2.0-flash-001")
+}
+
+embed_model_options = {
+    "OpenAI": ("OpenAI", "text-embedding-3-small"),
+    "Gemini": ("Gemini", "text-embedding-004")
+}
+
+selected_llm = st.selectbox(
+    "Select LLM Model",
+    options=list(llm_model_options.keys()),
+    key="llm_selection"
+)
+
+selected_embed = st.selectbox(
+    "Select Embedding Model",
+    options=list(embed_model_options.keys()),
+    key="embed_selection"
+)
+
 # Global Settings
 @st.cache_resource
 def initialize_models():
-    embed_model = OpenAIEmbedding(model="text-embedding-3-small")
-    embed_model = GeminiEmbedding(
-        model_name='text-embedding-004', 
-        api_key=GOOGLE_API_KEY, 
-        # title="this is a document"
-    )
+    # Initialize embedding model
+    embed_provider, embed_model_name = embed_model_options[selected_embed]
+    if embed_provider == "OpenAI":
+        embed_model = OpenAIEmbedding(model=embed_model_name)
+    elif embed_provider == "Gemini":
+        embed_model = GeminiEmbedding(
+            model_name=embed_model_name,
+            api_key=GOOGLE_API_KEY
+        )
 
-    llm = OpenAI(model="gpt-3.5-turbo-0125")
-    # deepseek
-    llm = DeepSeek(
-        model="deepseek-reasoner", 
-        api_key=DEEPSEEK_API_KEY
-    )
-
-    llm = Gemini(
-        model="models/gemini-2.0-flash-001", # all models: https://ai.google.dev/gemini-api/docs/models/gemini
-        api_key=GOOGLE_API_KEY,  # uses GOOGLE_API_KEY env var by default
-    )
+    # Initialize LLM
+    llm_provider, model_name = llm_model_options[selected_llm]
+    if llm_provider == "OpenAI":
+        llm = OpenAI(model=model_name)
+    elif llm_provider == "DeepSeek":
+        llm = DeepSeek(
+            model=model_name,
+            api_key=DEEPSEEK_API_KEY
+        )
+    elif llm_provider == "Gemini":
+        llm = Gemini(
+            model=model_name,
+            api_key=GOOGLE_API_KEY
+        )
 
     Settings.llm = llm
     Settings.embed_model = embed_model
