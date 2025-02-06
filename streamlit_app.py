@@ -255,6 +255,20 @@ if 'documents' in st.session_state:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            
+            # Display citations if available
+            if message.get('citations'):
+                st.markdown('---')
+                with st.expander("📚 Source Citations"):
+                    for i, citation in enumerate(message['citations'], 1):
+                        st.markdown(f"### Source {i}")
+                        if citation.get('url'):
+                            st.markdown(f"🔗 [Open Document]({citation['url']})")
+                        if citation.get('text'):
+                            st.markdown(f"**Excerpt:** {citation['text']}")
+                        if citation.get('metadata'):
+                            st.markdown(f"**Metadata:** {citation['metadata']}")
+                        st.markdown("---")
 
     # Accept user input
     if prompt := st.chat_input("Ask a question about your documents"):
