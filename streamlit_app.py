@@ -41,8 +41,8 @@ st.write("""
     1. LLM interacts with user specified documents.
     2. 3 files are ingested at the same time
          - PDF, Schwab 2024 Q10
-         - Word, Schwab 2023 Q10
-         - Excel, A table extracted from Schwab 2022 K10
+         - Word, Schwab 2023 Q10 (Converted from PDF to Word)
+         - Excel, A table extracted from Schwab 2022 K10 (page 26)
          
 ##### Due to limitation of hardware (memory, storage, API), demo is restricted from
     1. Reasoning(Ambiguous questions)
