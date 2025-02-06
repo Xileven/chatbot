@@ -224,7 +224,8 @@ if 'documents' in st.session_state:
                 similarity_top_k=5,
                 node_postprocessors=[reranker],
                 verbose=True,
-                synthesize=True
+                synthesize=True,
+                response_mode="tree_summarize"
             )
             
             st.session_state.query_engine = recursive_query_engine
@@ -288,6 +289,7 @@ if 'documents' in st.session_state:
         # Display assistant response in chat message container
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
+                # Get response with source nodes
                 response = st.session_state.query_engine.query(prompt)
                 st.markdown(response.response)
                 
@@ -296,19 +298,23 @@ if 'documents' in st.session_state:
                 if hasattr(response, 'source_nodes'):
                     for node in response.source_nodes:
                         citation = {
-                            'text': node.node.text,
-                            'metadata': f"Score: {node.score:.2f}"
+                            'text': node.node.text[:500] + "..." if len(node.node.text) > 500 else node.node.text,
+                            'metadata': f"Relevance Score: {node.score:.2f}"
                         }
-                        if hasattr(node.node, 'metadata'):
-                            citation['metadata'] = f"{citation['metadata']} | {node.node.metadata}"
+                        if hasattr(node.node, 'metadata') and node.node.metadata:
+                            file_name = node.node.metadata.get('file_name', '')
+                            if file_name:
+                                citation['metadata'] = f"{citation['metadata']} | File: {file_name}"
                         citations.append(citation)
                 
                 # Add response with citations to messages
-                st.session_state.messages.append({
-                    "role": "assistant", 
+                message = {
+                    "role": "assistant",
                     "content": response.response,
-                    "citations": citations
-                })
+                }
+                if citations:
+                    message["citations"] = citations
+                st.session_state.messages.append(message)
 
 else:
     st.info("Please load the documents first by clicking the 'Load and Process Documents' button above.")
