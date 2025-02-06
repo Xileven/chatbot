@@ -44,11 +44,11 @@ st.write("""
          - Word, Schwab 2023 Q10 (Converted from PDF to Word)
          - Excel, A table extracted from Schwab 2022 K10 (page 26)
          
-##### Due to limitation of hardware (memory, storage, API), demo is restricted from
+##### Due to limitation of hardware (memory, storage, GPU, API), demo is restricted from
     1. Reasoning(Ambiguous questions)
     2. Sematic questioning (follow up questions)
-    3. Large model (multiple languages and more accuracy)
-    4. Model tuning (optimization)
+    3. Large model (accuracy, tradeoff between speed and accuracy)
+    4. Fine-tune (optimization)
     5. Unstable output
          
 
