@@ -261,14 +261,22 @@ if 'documents' in st.session_state:
                 st.markdown('---')
                 with st.expander("📚 Source Citations"):
                     for i, citation in enumerate(message['citations'], 1):
-                        st.markdown(f"### Source {i}")
-                        if citation.get('url'):
-                            st.markdown(f"🔗 [Open Document]({citation['url']})")
-                        if citation.get('text'):
-                            st.markdown(f"**Excerpt:** {citation['text']}")
-                        if citation.get('metadata'):
-                            st.markdown(f"**Metadata:** {citation['metadata']}")
-                        st.markdown("---")
+                        # Validate citation structure
+                        if not isinstance(citation, dict) or not (citation.get('url') or citation.get('text')):
+                            continue
+                        
+                        try:
+                            st.markdown(f"### Source {i}")
+                            if citation.get('url'):
+                                st.markdown(f"🔗 [Open Document]({citation['url']})")
+                            if citation.get('text'):
+                                st.markdown(f"**Excerpt:** {citation['text']}")
+                            if citation.get('metadata'):
+                                st.markdown(f"**Metadata:** {citation['metadata']}")
+                            st.markdown("---")
+                        except Exception as e:
+                            st.error(f"Error displaying citation: {str(e)}")
+                            continue
 
     # Accept user input
     if prompt := st.chat_input("Ask a question about your documents"):
@@ -282,7 +290,25 @@ if 'documents' in st.session_state:
             with st.spinner("Thinking..."):
                 response = st.session_state.query_engine.query(prompt)
                 st.markdown(response.response)
-                st.session_state.messages.append({"role": "assistant", "content": response.response})
+                
+                # Extract source nodes and format as citations
+                citations = []
+                if hasattr(response, 'source_nodes'):
+                    for node in response.source_nodes:
+                        citation = {
+                            'text': node.node.text,
+                            'metadata': f"Score: {node.score:.2f}"
+                        }
+                        if hasattr(node.node, 'metadata'):
+                            citation['metadata'] = f"{citation['metadata']} | {node.node.metadata}"
+                        citations.append(citation)
+                
+                # Add response with citations to messages
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": response.response,
+                    "citations": citations
+                })
 
 else:
     st.info("Please load the documents first by clicking the 'Load and Process Documents' button above.")
