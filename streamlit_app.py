@@ -1,4 +1,6 @@
 import streamlit as st
+st.config.set_option('server.fileWatcherType', 'none')
+
 import nest_asyncio
 nest_asyncio.apply()
 
