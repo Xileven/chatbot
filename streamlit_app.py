@@ -5,6 +5,13 @@ nest_asyncio.apply()
 import os
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
+
+from llama_index.llms.gemini import Gemini
+from llama_index.embeddings.gemini import GeminiEmbedding
+# import google.generativeai as genai
+
+from llama_index.llms.deepseek import DeepSeek
+
 from llama_index.core import VectorStoreIndex, Settings, Document
 from llama_index.core.node_parser import SentenceSplitter, MarkdownElementNodeParser
 from llama_index.core.schema import TextNode
@@ -53,16 +60,59 @@ st.write("""
 import dotenv
 dotenv.load_dotenv()
 
-# Set API keys from Streamlit secrets
+# API access to llama-cloud
 os.environ["LLAMA_CLOUD_API_KEY"] = os.getenv("LLAMA_CLOUD_API_KEY")
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 os.environ["PINECONE_API_KEY"] = os.getenv("PINECONE_API_KEY")
+PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
+
+# Using OpenAI API for embeddings/llms
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+
+os.environ["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY")
+os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")  
+GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")  # from example
+
+os.environ["DEEPSEEK_API_KEY"] = os.getenv("DEEPSEEK_API_KEY")
+DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
+
+
+# Model Selection UI
+embed_model_option = st.selectbox(
+    "Select Embedding Model",
+    ["OpenAI text-embedding-3-small", "Google text-embedding-004"]
+)
+
+llm_model_option = st.selectbox(
+    "Select LLM Model",
+    ["OpenAI GPT-3.5", "DeepSeek Reasoner", "Gemini 2.0"]
+)
 
 # Global Settings
 @st.cache_resource
 def initialize_models():
-    embed_model = OpenAIEmbedding(model="text-embedding-3-small")
-    llm = OpenAI(model="gpt-3.5-turbo-0125")
+    # Initialize embedding model based on selection
+    if embed_model_option == "OpenAI text-embedding-3-small":
+        embed_model = OpenAIEmbedding(model="text-embedding-3-small")
+    else:
+        embed_model = GeminiEmbedding(
+            model_name='text-embedding-004', 
+            api_key=GOOGLE_API_KEY
+        )
+
+    # Initialize LLM based on selection
+    if llm_model_option == "OpenAI GPT-3.5":
+        llm = OpenAI(model="gpt-3.5-turbo-0125")
+    elif llm_model_option == "DeepSeek Reasoner":
+        llm = DeepSeek(
+            model="deepseek-reasoner", 
+            api_key=DEEPSEEK_API_KEY
+        )
+    else:
+        llm = Gemini(
+            model="models/gemini-2.0-flash-001",
+            api_key=GOOGLE_API_KEY
+        )
+
     Settings.llm = llm
     Settings.embed_model = embed_model
     return llm

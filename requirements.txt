@@ -23,3 +23,6 @@ requests==2.32.3
 git+https://github.com/FlagOpen/FlagEmbedding.git
 docx2txt
 openpyxl
+llama-index-embedding-gemini
+llama-index-llms-gemini
+llama-index-llms-deepseek
