@@ -8,7 +8,7 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 
 from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.gemini import GeminiEmbedding
-# import google.generativeai as genai
+import google.generativeai as genai
 
 from llama_index.llms.deepseek import DeepSeek
 
@@ -76,42 +76,27 @@ os.environ["DEEPSEEK_API_KEY"] = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
 
 
-# Model Selection UI
-embed_model_option = st.selectbox(
-    "Select Embedding Model",
-    ["OpenAI text-embedding-3-small", "Google text-embedding-004"]
-)
-
-llm_model_option = st.selectbox(
-    "Select LLM Model",
-    ["OpenAI GPT-3.5", "DeepSeek Reasoner", "Gemini 2.0"]
-)
-
 # Global Settings
 @st.cache_resource
 def initialize_models():
-    # Initialize embedding model based on selection
-    if embed_model_option == "OpenAI text-embedding-3-small":
-        embed_model = OpenAIEmbedding(model="text-embedding-3-small")
-    else:
-        embed_model = GeminiEmbedding(
-            model_name='text-embedding-004', 
-            api_key=GOOGLE_API_KEY
-        )
+    embed_model = OpenAIEmbedding(model="text-embedding-3-small")
+    embed_model = GeminiEmbedding(
+        model_name='text-embedding-004', 
+        api_key=GOOGLE_API_KEY, 
+        # title="this is a document"
+    )
 
-    # Initialize LLM based on selection
-    if llm_model_option == "OpenAI GPT-3.5":
-        llm = OpenAI(model="gpt-3.5-turbo-0125")
-    elif llm_model_option == "DeepSeek Reasoner":
-        llm = DeepSeek(
-            model="deepseek-reasoner", 
-            api_key=DEEPSEEK_API_KEY
-        )
-    else:
-        llm = Gemini(
-            model="models/gemini-2.0-flash-001",
-            api_key=GOOGLE_API_KEY
-        )
+    llm = OpenAI(model="gpt-3.5-turbo-0125")
+    # deepseek
+    llm = DeepSeek(
+        model="deepseek-reasoner", 
+        api_key=DEEPSEEK_API_KEY
+    )
+
+    llm = Gemini(
+        model="models/gemini-2.0-flash-001", # all models: https://ai.google.dev/gemini-api/docs/models/gemini
+        api_key=GOOGLE_API_KEY,  # uses GOOGLE_API_KEY env var by default
+    )
 
     Settings.llm = llm
     Settings.embed_model = embed_model
