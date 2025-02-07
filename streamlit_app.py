@@ -87,7 +87,7 @@ llm_model_options = {
 
 embed_model_options = {
     "OpenAI": ("OpenAI", "text-embedding-3-small"),
-    "Gemini": ("Gemini", "text-embedding-004")
+    "Gemini": ("Gemini", "models/text-embedding-004")
 }
 
 selected_llm = st.selectbox(
