@@ -22,6 +22,8 @@ llama-parse==0.5.20
 llamaindex-py-client==0.1.19
 nest-asyncio==1.6.0
 openai==1.60.0
+streamlit
+pymilvus
 python-dotenv
 requests==2.32.3
 git+https://github.com/FlagOpen/FlagEmbedding.git
