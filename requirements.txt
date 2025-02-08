@@ -25,5 +25,7 @@ openai==1.60.0
 python-dotenv
 requests==2.32.3
 git+https://github.com/FlagOpen/FlagEmbedding.git
+milvus-lite==2.4.11
 docx2txt
 openpyxl
+tavily-python==0.5.1

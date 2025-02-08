@@ -62,10 +62,9 @@ st.write("""
 import dotenv
 dotenv.load_dotenv()
 
-# API access to llama-cloud
 os.environ["LLAMA_CLOUD_API_KEY"] = os.getenv("LLAMA_CLOUD_API_KEY")
-os.environ["PINECONE_API_KEY"] = os.getenv("PINECONE_API_KEY")
-PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
+os.environ["MILVUS_API_KEY"] = os.getenv("ZILLIZ_API_KEY")
+MILVUS_API_KEY = os.getenv('ZILLIZ_API_KEY')
 
 # Using OpenAI API for embeddings/llms
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
@@ -77,254 +76,214 @@ GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")  # from example
 os.environ["DEEPSEEK_API_KEY"] = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
 
+# Tavily API key
+os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY")
+TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
 
-# Model Selection
-llm_model_options = {
-    "GPT-3.5": ("OpenAI", "gpt-3.5-turbo-0125"),
-    "DeepSeek Reasoner": ("DeepSeek", "deepseek-reasoner"),
-    "Gemini": ("Gemini", "models/gemini-2.0-flash-001")
-}
 
-embed_model_options = {
-    "OpenAI": ("OpenAI", "text-embedding-3-small"),
-    "Gemini": ("Gemini", "models/text-embedding-004")
-}
+import os
 
-selected_llm = st.selectbox(
-    "Select LLM Model",
-    options=list(llm_model_options.keys()),
-    key="llm_selection"
+from llama_index.llms.openai import OpenAI
+from llama_index.embeddings.openai import OpenAIEmbedding
+
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
+from llama_index.vector_stores.milvus import MilvusVectorStore
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.schema import TextNode
+from llama_index.embeddings.openai import OpenAIEmbedding
+
+from llama_index.core import VectorStoreIndex
+from llama_index.core import Settings
+from llama_index.core import SimpleDirectoryReader
+from llama_index.core import StorageContext
+from llama_index.core import Document
+from llama_index.readers.file import (
+    DocxReader,
+    PandasExcelReader,
 )
+import pandas
+from tavily import TavilyClient
 
-selected_embed = st.selectbox(
-    "Select Embedding Model",
-    options=list(embed_model_options.keys()),
-    key="embed_selection"
-)
+# Import web search related packages
+from llama_index.core.tools import QueryEngineTool, ToolMetadata
+from llama_index.agent.openai import OpenAIAgent
+from llama_index.core.query_engine import RouterQueryEngine
+import requests
 
-# Global Settings
-@st.cache_resource
-def initialize_models():
-    # Initialize embedding model
-    embed_provider, embed_model_name = embed_model_options[selected_embed]
-    if embed_provider == "OpenAI":
-        embed_model = OpenAIEmbedding(model=embed_model_name)
-    elif embed_provider == "Gemini":
-        embed_model = GeminiEmbedding(
-            model_name=embed_model_name,
-            api_key=GOOGLE_API_KEY
-        )
 
-    # Initialize LLM
-    llm_provider, model_name = llm_model_options[selected_llm]
-    if llm_provider == "OpenAI":
-        llm = OpenAI(model=model_name)
-    elif llm_provider == "DeepSeek":
-        llm = DeepSeek(
-            model=model_name,
-            api_key=DEEPSEEK_API_KEY
-        )
-    elif llm_provider == "Gemini":
-        llm = Gemini(
-            model=model_name,
-            api_key=GOOGLE_API_KEY
-        )
-
-    Settings.llm = llm
-    Settings.embed_model = embed_model
-    return llm
-
-llm = initialize_models()
-
-# Initialize parsers
-@st.cache_resource
-def initialize_parsers():
-    return LlamaParse(result_type="markdown")
-
-llama_parser = initialize_parsers()
-
-# Initialize document readers
-@st.cache_resource
-def initialize_readers():
-    llama_parser = LlamaParse(result_type="markdown")    
-    docx_reader = DocxReader()
+#%%
+# Function to perform web search using Tavily API directly
+def web_search(query: str) -> str:
+    if not TAVILY_API_KEY:
+        return "Error: Tavily API key is not set. Please set the TAVILY_API_KEY environment variable."
     
-    file_extractor = {
-        # Document formats
-        ".pdf": llama_parser,  # Converts PDF to markdown
-        ".docx": docx_reader,
-        ".doc": docx_reader,
-        ".txt": None,  # Default reader for text files
-        ".xlsx": PandasExcelReader(),  # Excel files (newer format)
-        ".xls": PandasExcelReader(),   # Excel files (older format)
-    }
-    return file_extractor
+    try:
+        client = TavilyClient(api_key=TAVILY_API_KEY)
+        result = client.search(
+            query=query,
+            search_depth="advanced",
+            topic="news",
+            time_range="w",
+            include_answer="advanced",
+            max_results=5,
+        )
+        
+        # Extract the answer and search results
+        answer = result.get('answer', '')
+        search_results = result.get('results', [])
+        
+        # Combine the information
+        combined_info = [answer]
+        for res in search_results:
+            combined_info.append(f"- {res.get('title')}: {res.get('content')}")
+        
+        return "\n".join(combined_info)
+    except Exception as e:
+        return f"Error: {str(e)}"
 
-file_extractor = initialize_readers()
+#%%
+# Function to combine RAG and web search results
+def hybrid_search(query):
+    # Get RAG results
+    rag_response = recursive_query_engine.query(query)
+    
+    # Get web search results
+    web_response = web_search(query)
+    
+    # Create tools for the final agent
+    rag_tool = QueryEngineTool(
+        query_engine=recursive_query_engine,
+        metadata=ToolMetadata(
+            name="rag_knowledge",
+            description="Provides information from the local knowledge base"
+        )
+    )
+    
+    # Create the final agent to combine results
+    final_agent = OpenAIAgent.from_tools(
+        [rag_tool],
+        verbose=True
+    )
+    
+    # Combine the results
+    combined_prompt = f"""
+    Please provide a comprehensive answer based on both local knowledge and web search results:
+    
+    Local Knowledge: {rag_response}
+    Web Search Results: {web_response}
+    
+    Synthesize both sources to provide the most up-to-date and accurate information.
+    If the information from different sources conflicts, prefer more recent sources and explain the discrepancy.
+    """
+    
+    final_response = final_agent.chat(combined_prompt)
+    return final_response
 
-import glob
-print(f"Files in './FILES': {glob.glob('./FILES/*')}")
+#%%
+# ====================================================================================================
+print ("load Index Ready nodes from Milvus")
+# ====================================================================================================
+#%%
+vector_store = MilvusVectorStore(
+    uri="https://in03-421d8d9c7f4c34b.serverless.gcp-us-west1.cloud.zilliz.com",
+    token=MILVUS_API_KEY,
+    collection_name="bama_llm_demo__EMBED_text_embedding_ada_002__LLM_gpt_3P5_turbo_0125",
+    dim=1536,  # 1536 is default dim for OpenAI
 
-# Add a button to load and process documents
-if st.button("[click] Load and Process Documents (about 5 min)"):
-    with st.spinner("Loading and processing documents..."):
-        try:
-            # Load documents from FILES directory
-            documents = SimpleDirectoryReader(
-                "./FILES", 
-                file_extractor=file_extractor,
-                filename_as_id=True  
-            ).load_data()
-            
-            if documents:
-                st.session_state.documents = documents
-                st.success(f"Successfully loaded {len(documents)} documents from FILES directory")
-            else:
-                st.warning("No documents found in FILES directory")
-        except Exception as e:
-            st.error(f"Error loading documents: {str(e)}")
+)
 
-# Process documents and create index
-if 'documents' in st.session_state:
-    if 'index_created' not in st.session_state:
-        with st.spinner("Processing documents and creating index..."):
-            # Create nodes using both approaches
-            text_splitter = SentenceSplitter(chunk_size=512, chunk_overlap=100)
-            page_nodes = []
-            for doc in st.session_state.documents:
-                text_chunks = text_splitter.split_text(doc.text)
-                for i, chunk in enumerate(text_chunks):
-                    node = TextNode(
-                        text=chunk,
-                        metadata={
-                            "file_name": doc.metadata.get("file_name", ""),
-                            "chunk_index": i,
-                        }
-                    )
-                    page_nodes.append(node)
+storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
-            # Parse markdown structure
-            node_parser = MarkdownElementNodeParser(llm=llm, num_workers=8)
-            nodes = node_parser.get_nodes_from_documents(st.session_state.documents)
-            base_nodes, objects = node_parser.get_nodes_and_objects(nodes)
-
-            # Combine all nodes
-            all_nodes = base_nodes + objects + page_nodes
-
-            # Create index
-            recursive_index = VectorStoreIndex(all_nodes, show_progress=True)
-            
-            # Create query engine
-            reranker = FlagEmbeddingReranker(
-                model="BAAI/bge-reranker-large",
-                top_n=3,
+recursive_index = VectorStoreIndex.from_vector_store(
+            vector_store = vector_store,
+            # storage_context = storage_context,
+            show_progress=True
             )
+
+
+#%%
+from llama_index.postprocessor.flag_embedding_reranker import (
+    # pruning away irrelevant nodes from the context
+    FlagEmbeddingReranker,
+)
+reranker = FlagEmbeddingReranker(
+                                model="BAAI/bge-reranker-large",
+                                top_n=5,
+)
+
+recursive_query_engine = recursive_index.as_query_engine(
+                                        similarity_top_k=10, 
+                                        node_postprocessors=[reranker], 
+                                        verbose=True,
+                                        synthesize=True
+)
+
+
+
+# %%
+# Initialize session state for chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Add web search toggle
+st.sidebar.title("Search Options")
+use_web_search = st.sidebar.toggle("Enable Web Search", value=False)
+
+# Display chat history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Chat input
+if prompt := st.chat_input("What would you like to know about Schwab?"):
+    # Display user message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Display assistant response
+    with st.chat_message("assistant"):
+        if use_web_search:
+            response_placeholder = st.empty()
+            response_placeholder.markdown("🤔 Searching both local documents and the web...")
             
-            recursive_query_engine = recursive_index.as_query_engine(
-                similarity_top_k=5,
-                node_postprocessors=[reranker],
-                verbose=True,
-                synthesize=True,
-                response_mode="tree_summarize"
-            )
+            # Get RAG results with citations
+            rag_response = recursive_query_engine.query(prompt)
+            rag_response_text = str(rag_response)
             
-            st.session_state.query_engine = recursive_query_engine
-            st.session_state.index_created = True
-            st.success("Index created successfully!")
-
-    # Create the chat interface
-    st.header("Chat with your Documents")
-
-    # Display sample questions
-    st.markdown("""
-    **Sample Questions:**
-    ```
-    - [PDF] How Integration of Ameritrade impact client metrics from 2023 to 2024?
-    - [Excel] Where is the headquarters of schwab and what is its size, including leased and owned
-    - [PDF & Word] Compare Client Metrics of Three Month Ended from 2022, to 2023, to 2024, in numbers, and printout in table
-    - [PDF & Word] Compare Total Net Revenue from 2022, to 2023, to 2024 and printout in table
-    - [Summary] based on Client Metrics of Three Month Ended from 2022, to 2023, to 2024, analyze the business
-    - Compare Total Net Revenue from 2022, to 2023, to 2024 and printout in table
-    ```
-    """)
-
-    # Initialize chat history
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    # Display chat messages from history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            # Get web search results
+            web_response = web_search(prompt)
             
-            # Display citations if available
-            if message.get('citations'):
-                st.markdown('---')
-                with st.expander("📚 Source Citations"):
-                    for i, citation in enumerate(message['citations'], 1):
-                        # Validate citation structure
-                        if not isinstance(citation, dict) or not (citation.get('url') or citation.get('text')):
-                            continue
-                        
-                        try:
-                            st.markdown(f"### Source {i}")
-                            if citation.get('url'):
-                                st.markdown(f"🔗 [Open Document]({citation['url']})")
-                            if citation.get('text'):
-                                st.markdown(f"**Excerpt:** {citation['text']}")
-                            if citation.get('metadata'):
-                                st.markdown(f"**Metadata:** {citation['metadata']}")
-                            st.markdown("---")
-                        except Exception as e:
-                            st.error(f"Error displaying citation: {str(e)}")
-                            continue
+            # Format the combined response with citations
+            combined_response = f"""
+### Local Document Search Results:
+{rag_response_text}
 
-    # Accept user input
-    if prompt := st.chat_input("Ask a question about your documents"):
-        # Display user message in chat message container
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+### Web Search Results:
+{web_response}
+"""
+            response_placeholder.markdown(combined_response)
+            st.session_state.messages.append({"role": "assistant", "content": combined_response})
+        else:
+            response_placeholder = st.empty()
+            response_placeholder.markdown("🤔 Searching local documents...")
+            
+            # Get RAG results with citations
+            response = recursive_query_engine.query(prompt)
+            response_text = str(response)
+            
+            response_placeholder.markdown(response_text)
+            st.session_state.messages.append({"role": "assistant", "content": response_text})
 
-        # Display assistant response in chat message container
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                # Get response with source nodes
-                response = st.session_state.query_engine.query(prompt)
-                st.markdown(response.response)
-                
-                # Extract source nodes and format as citations
-                citations = []
-                if hasattr(response, 'source_nodes'):
-                    for node in response.source_nodes:
-                        citation = {
-                            'text': node.node.text[:500] + "..." if len(node.node.text) > 500 else node.node.text,
-                            'metadata': f"Relevance Score: {node.score:.2f}"
-                        }
-                        if hasattr(node.node, 'metadata') and node.node.metadata:
-                            file_name = node.node.metadata.get('file_name', '')
-                            if file_name:
-                                citation['metadata'] = f"{citation['metadata']} | File: {file_name}"
-                        citations.append(citation)
-                
-                # Display citations immediately
-                if citations:
-                    st.markdown('---')
-                    with st.expander("📚 Source Citations"):
-                        for i, citation in enumerate(citations, 1):
-                            st.markdown(f"### Source {i}")
-                            st.markdown(f"**Excerpt:** {citation['text']}")
-                            st.markdown(f"**{citation['metadata']}**")
-                            st.markdown("---")
-                
-                # Add response with citations to messages
-                message = {
-                    "role": "assistant",
-                    "content": response.response,
-                }
-                if citations:
-                    message["citations"] = citations
-                st.session_state.messages.append(message)
-
-else:
-    st.info("Please load the documents first by clicking the 'Load and Process Documents' button above.")
+# Display sample questions
+st.markdown("""
+**Sample Questions:**
+```
+- [PDF] How Integration of Ameritrade impact client metrics from 2023 to 2024?
+- [Excel] Where is the headquarters of schwab and what is its size, including leased and owned
+- [PDF & Word] Compare Client Metrics of Three Month Ended from 2022, to 2023, to 2024, in numbers, and printout in table
+- [PDF & Word] Compare Total Net Revenue from 2022, to 2023, to 2024 and printout in table
+- [Summary] based on Client Metrics of Three Month Ended from 2022, to 2023, to 2024, analyze the business
+- Compare Total Net Revenue from 2022, to 2023, to 2024 and printout in table
+```
+""")
