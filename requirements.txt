@@ -7,6 +7,7 @@ llama-index-cli==0.4.0
 llama-index-core==0.12.14
 llama-index-embeddings-gemini==0.3.1
 llama-index-embeddings-openai==0.3.1
+llama-index-embeddings-fastembed
 llama-index-indices-managed-llama-cloud==0.6.4
 llama-index-llms-deepseek==0.1.1
 llama-index-llms-gemini==0.4.7
@@ -25,7 +26,8 @@ openai==1.60.0
 streamlit
 pymilvus
 python-dotenv
-requests==2.32.3
+requests
+serpapi
 git+https://github.com/FlagOpen/FlagEmbedding.git
 milvus-lite==2.4.11
 docx2txt

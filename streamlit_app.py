@@ -1,6 +1,9 @@
 import streamlit as st
-from prototype import RagSystem, WebSearcher
+from typing import List, Dict
 import os
+import requests
+from pymilvus import connections, Collection
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
 
 # Initialize session states
 if 'messages' not in st.session_state:
@@ -13,15 +16,51 @@ if 'show_citations' not in st.session_state:
 # Initialize components
 @st.cache_resource
 def get_rag_system():
-    return RagSystem(
-        zilliz_uri=os.getenv('ZILLIZ_URI'),
-        zilliz_token=os.getenv('ZILLIZ_TOKEN'),
-        llm_api_key=os.getenv('LLM_API_KEY')
-    )
+    class RagSystem:
+        def __init__(self):
+            connections.connect(
+                alias="default",
+                uri=os.getenv('ZILLIZ_URI'),
+                token=os.getenv('ZILLIZ_TOKEN')
+            )
+            self.collection = Collection("chatbot_data")
+            self.embed_model = FastEmbedEmbedding()
+            
+        def query(self, prompt: str) -> Dict:
+            query_embedding = self.embed_model.get_text_embedding(prompt)
+            search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
+            results = self.collection.search(
+                data=[query_embedding],
+                anns_field="embedding",
+                param=search_params,
+                limit=3,
+                output_fields=["content"]
+            )
+            return {
+                'answer': '\n'.join([hit.entity.get('content') for hit in results[0]]),
+                'sources': [f"VectorDB result {i+1}" for i in range(len(results[0]))]
+            }
+
+    return RagSystem()
 
 @st.cache_resource
 def get_searcher():
-    return WebSearcher(api_key=os.getenv('SEARCH_API_KEY'))
+    class WebSearcher:
+        def search(self, query: str) -> List[str]:
+            try:
+                response = requests.get(
+                    "https://serpapi.com/search",
+                    params={
+                        "q": query,
+                        "api_key": os.getenv('SEARCH_API_KEY')
+                    }
+                )
+                results = response.json().get('organic_results', [])[:3]
+                return [f"{res['title']} ({res['link']})" for res in results]
+            except Exception as e:
+                return [f"Search error: {str(e)}"]
+
+    return WebSearcher()
 
 # App layout
 st.set_page_config(page_title='ChatBot', layout='wide')
