@@ -29,4 +29,3 @@ milvus-lite==2.4.11
 docx2txt
 openpyxl
 tavily-python==0.5.1
-FlagEmbedding @ git+https://github.com/FlagOpen/FlagEmbedding.git@cbf98a6140713f9f9d800bf6947d4c1bde5cad56
