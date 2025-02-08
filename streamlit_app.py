@@ -14,13 +14,18 @@ import google.generativeai as genai
 
 from llama_index.llms.deepseek import DeepSeek
 
-from llama_index.core import VectorStoreIndex, Settings, Document, SimpleDirectoryReader, StorageContext
+from llama_index.core import VectorStoreIndex, Settings, Document
 from llama_index.core.node_parser import SentenceSplitter, MarkdownElementNodeParser
 from llama_index.core.schema import TextNode
 from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
 from llama_parse import LlamaParse
 import requests 
-
+from llama_index.llms.openai import OpenAI
+from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.core import VectorStoreIndex
+from llama_index.core import Settings
+from llama_index.core import SimpleDirectoryReader
+from llama_index.core import Document
 from llama_index.readers.file import (
     DocxReader,
     PandasExcelReader,
@@ -78,16 +83,23 @@ TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
 
 import os
 
+from llama_index.llms.openai import OpenAI
+from llama_index.embeddings.openai import OpenAIEmbedding
+
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.vector_stores.milvus import MilvusVectorStore
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import TextNode
+from llama_index.embeddings.openai import OpenAIEmbedding
 
-from llama_index.core import (
-    VectorStoreIndex,
-    Settings,
-    SimpleDirectoryReader,
-    StorageContext,
-    Document
+from llama_index.core import VectorStoreIndex
+from llama_index.core import Settings
+from llama_index.core import SimpleDirectoryReader
+from llama_index.core import StorageContext
+from llama_index.core import Document
+from llama_index.readers.file import (
+    DocxReader,
+    PandasExcelReader,
 )
 import pandas
 from tavily import TavilyClient
