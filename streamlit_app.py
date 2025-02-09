@@ -32,7 +32,7 @@ def get_rag_system():
             
             from pymilvus import FieldSchema, CollectionSchema, DataType
 
-            # Check collection existence
+            # Create collection if not exists
             if not utility.has_collection("chatbot_data"):
                 fields = [
                     FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
@@ -55,8 +55,19 @@ def get_rag_system():
             self.collection.load()
             self.embed_model = FastEmbedEmbedding()
 
+            if self.collection.is_empty:
+                test_data = [
+                    {"content": "Sample chat history 1: User preferences"},
+                    {"content": "Sample chat history 2: FAQ responses"},
+                    {"content": "Sample chat history 3: Troubleshooting guide"}
+                ]
+                self.collection.insert(test_data)
+                self.collection.flush()
+                st.toast("Inserted 3 test documents", icon="📄")
+
         def query(self, prompt: str) -> Dict:
             query_embedding = self.embed_model.get_text_embedding(prompt)
+            st.toast(f"Embedding dimension: {len(query_embedding)}", icon="🔢")
             search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
             results = self.collection.search(
                 data=[query_embedding],
@@ -65,6 +76,7 @@ def get_rag_system():
                 limit=3,
                 output_fields=["content"]
             )
+            st.toast(f"Found {len(results[0])} matches", icon="🔍")
             return {
                 'answer': '\n'.join([hit.entity.get('content') for hit in results[0]]),
                 'sources': [f"VectorDB result {i+1}" for i in range(len(results[0]))]
