@@ -2,10 +2,11 @@ import streamlit as st
 from typing import List, Dict
 import os
 import requests
-from llama_index.core import VectorStoreIndex, SimpleVectorStore, Document
-from llama_index.core.storage.storage_context import StorageContext
-from llama_index.embeddings.fastembed import FastEmbedEmbedding
-from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
+from llama_index import VectorStoreIndex, Document, ServiceContext
+from llama_index.vector_stores import SimpleVectorStore
+from llama_index.storage.storage_context import StorageContext
+from llama_index.embeddings import FastEmbedEmbedding
+from llama_index.postprocessor import SentenceEmbeddingOptimizer
 
 # Initialize session states
 if 'messages' not in st.session_state:
@@ -20,12 +21,17 @@ if 'show_citations' not in st.session_state:
 def get_rag_system():
     class RagSystem:
         def __init__(self):
+            # Initialize embedding model
+            self.embed_model = FastEmbedEmbedding()
+            
+            # Create service context
+            self.service_context = ServiceContext.from_defaults(
+                embed_model=self.embed_model,
+            )
+            
             # Initialize vector store
             vector_store = SimpleVectorStore()
             storage_context = StorageContext.from_defaults(vector_store=vector_store)
-            
-            # Initialize embedding model
-            self.embed_model = FastEmbedEmbedding()
             
             # Create some initial documents if needed
             documents = [
@@ -36,21 +42,20 @@ def get_rag_system():
             self.index = VectorStoreIndex.from_documents(
                 documents,
                 storage_context=storage_context,
-                embed_model=self.embed_model,
+                service_context=self.service_context,
                 show_progress=True
             )
             
-            # Initialize reranker
-            self.reranker = FlagEmbeddingReranker(
-                model="BAAI/bge-reranker-large",
-                top_n=3
+            # Initialize sentence embedding optimizer for reranking
+            self.reranker = SentenceEmbeddingOptimizer(
+                top_n=3,
+                embed_model=self.embed_model
             )
             
             # Create query engine
             self.query_engine = self.index.as_query_engine(
                 similarity_top_k=5,
                 node_postprocessors=[self.reranker],
-                verbose=True,
                 response_mode="compact"
             )
 
