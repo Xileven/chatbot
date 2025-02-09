@@ -2,7 +2,7 @@ import streamlit as st
 from typing import List, Dict
 import os
 import requests
-from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType
+from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
 
 # Initialize session states
@@ -32,8 +32,8 @@ def get_rag_system():
             
             from pymilvus import FieldSchema, CollectionSchema, DataType
 
-            # Create collection if not exists
-            if not connections.has_collection("chatbot_data"):
+            # Check collection existence
+            if not utility.has_collection("chatbot_data"):
                 fields = [
                     FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
                     FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=2000),
