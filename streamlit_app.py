@@ -175,29 +175,23 @@ def initialize_services():
             show_progress=True
         )
         
-        # Initialize query engine without reranker first
+
+#%%
+        from llama_index.postprocessor.flag_embedding_reranker import (
+            # pruning away irrelevant nodes from the context
+            FlagEmbeddingReranker,
+        )
+        reranker = FlagEmbeddingReranker(
+            model="BAAI/bge-reranker-large",
+            top_n=5,
+        )
+        
         recursive_query_engine = recursive_index.as_query_engine(
             similarity_top_k=10,
+            node_postprocessors=[reranker],
             verbose=True,
             synthesize=True
         )
-        
-        try:
-            # Attempt to initialize reranker
-            from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
-            reranker = FlagEmbeddingReranker(
-                model="BAAI/bge-reranker-large",
-                top_n=5,
-            )
-            # Update query engine with reranker if successful
-            recursive_query_engine = recursive_index.as_query_engine(
-                similarity_top_k=10,
-                node_postprocessors=[reranker],
-                verbose=True,
-                synthesize=True
-            )
-        except Exception as reranker_error:
-            st.warning(f"Reranker initialization failed, continuing without reranking: {str(reranker_error)}")
         
         st.session_state.recursive_query_engine = recursive_query_engine
         st.session_state.initialized = True
