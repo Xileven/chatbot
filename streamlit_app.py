@@ -54,7 +54,7 @@ import os
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 
-from llama_index.embeddings.fastembed import FastEmbedEmbedding
+# from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.vector_stores.milvus import MilvusVectorStore
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import TextNode
