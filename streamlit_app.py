@@ -18,14 +18,25 @@ if 'show_citations' not in st.session_state:
 def get_rag_system():
     class RagSystem:
         def __init__(self):
+            # Validate environment variables first
+            if not os.getenv('ZILLIZ_URI') or not os.getenv('ZILLIZ_TOKEN'):
+                raise ValueError("Missing Zilliz credentials in environment variables")
+            
+            # Connect using Zilliz Cloud format
             connections.connect(
                 alias="default",
-                uri=os.getenv('ZILLIZ_URI'),
-                token=os.getenv('ZILLIZ_TOKEN')
+                uri=os.getenv('ZILLIZ_URI'),  # Should be "https://xxx.api.region.zillizcloud.com"
+                token=os.getenv('ZILLIZ_TOKEN'),
+                secure=True
             )
-            self.collection = Collection("chatbot_data")
-            self.embed_model = FastEmbedEmbedding()
             
+            # Initialize collection with proper checks
+            self.collection = Collection("chatbot_data")
+            if not self.collection.has_index():
+                raise ConnectionError("Collection missing required index")
+            self.collection.load()
+            self.embed_model = FastEmbedEmbedding()
+
         def query(self, prompt: str) -> Dict:
             query_embedding = self.embed_model.get_text_embedding(prompt)
             search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
@@ -62,6 +73,18 @@ def get_searcher():
 
     return WebSearcher()
 
+def validate_zilliz_connection():
+    try:
+        connections.connect(
+            alias="default",
+            uri=os.getenv('ZILLIZ_URI'),
+            token=os.getenv('ZILLIZ_TOKEN'), 
+            secure=True
+        )
+        return True, "Connection successful"
+    except Exception as e:
+        return False, f"Connection failed: {str(e)}"
+
 # App layout
 st.set_page_config(page_title='ChatBot', layout='wide')
 
@@ -70,6 +93,17 @@ with st.sidebar:
     st.header('Settings')
     st.session_state.web_search = st.toggle('Enable Web Search', value=True)
     st.session_state.show_citations = st.toggle('Show Citations', value=True)
+    if st.button("Test Zilliz Connection"):
+        success, message = validate_zilliz_connection()
+        if success:
+            st.success(message)
+        else:
+            st.error(message)
+            st.markdown("""
+                **Required format:**  
+                `ZILLIZ_URI=https://[cluster-id].api.[region].zillizcloud.com`  
+                `ZILLIZ_TOKEN=your_db_token`
+            """)
 
 # Chat interface
 for message in st.session_state.messages:
