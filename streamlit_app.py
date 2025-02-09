@@ -2,7 +2,7 @@ import streamlit as st
 from typing import List, Dict
 import os
 import requests
-from pymilvus import connections, Collection
+from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
 
 # Initialize session states
@@ -30,10 +30,28 @@ def get_rag_system():
                 secure=True
             )
             
-            # Initialize collection with proper checks
-            self.collection = Collection("chatbot_data")
-            if not self.collection.has_index():
-                raise ConnectionError("Collection missing required index")
+            from pymilvus import FieldSchema, CollectionSchema, DataType
+
+            # Create collection if not exists
+            if not connections.has_collection("chatbot_data"):
+                fields = [
+                    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+                    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=2000),
+                    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=768)
+                ]
+                schema = CollectionSchema(fields, description="Chatbot knowledge base")
+                self.collection = Collection("chatbot_data", schema)
+                
+                # Create index
+                index_params = {
+                    "index_type": "IVF_FLAT",
+                    "metric_type": "L2",
+                    "params": {"nlist": 128}
+                }
+                self.collection.create_index("embedding", index_params)
+            else:
+                self.collection = Collection("chatbot_data")
+            
             self.collection.load()
             self.embed_model = FastEmbedEmbedding()
 
