@@ -1,259 +1,330 @@
+import streamlit as st
+st.config.set_option('server.fileWatcherType', 'none')
 
-
-# from https://github.com/run-llama/llama_parse/blob/main/examples/demo_advanced.ipynb
-
-#%%
-# ====================================================================================================
-# ====================================================================================================
-# llama-parse is async-first, running the async code in a notebook requires the use of nest_asyncio
-print ("asyncio")
 import nest_asyncio
 nest_asyncio.apply()
 
-
-print("dotenv")
-# API access to llama-cloud
-import dotenv
-dotenv.load_dotenv('/Users/jinwenliu/github/.env/.env')
-
-# # Reload environment to ensure we have the latest values
-# dotenv.load_dotenv('/Users/jinwenliu/github/.env/.env', override=True)
-
-
-#%%
-# ====================================================================================================
-print ("load API keys")
-# ====================================================================================================
 import os
-# API access to llama-cloud
-# os.environ["LLAMA_CLOUD_API_KEY"] = os.getenv("LLAMA_CLOUD_API_KEY")
-os.environ["MILVUS_API_KEY"] = os.getenv("ZILLIZ_API_KEY")
-MILVUS_API_KEY = os.getenv('ZILLIZ_API_KEY')
-
-# Using OpenAI API for embeddings/llms
-# os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-
-# os.environ["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY")
-# os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")  
-# GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")  # from example
-
-# os.environ["DEEPSEEK_API_KEY"] = os.getenv("DEEPSEEK_API_KEY")
-# DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
-
-# Tavily API key
-os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY")
-TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
-
-#%%
-# ====================================================================================================
-print ("import")
-# ====================================================================================================
-
-import os
-
 from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 
-# from llama_index.embeddings.fastembed import FastEmbedEmbedding
-from llama_index.vector_stores.milvus import MilvusVectorStore
-from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.schema import TextNode
-from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.llms.gemini import Gemini
+from llama_index.embeddings.gemini import GeminiEmbedding
+import google.generativeai as genai
 
+from llama_index.llms.deepseek import DeepSeek
+
+from llama_index.core import VectorStoreIndex, Settings, Document
+from llama_index.core.node_parser import SentenceSplitter, MarkdownElementNodeParser
+from llama_index.core.schema import TextNode
+from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
+from llama_parse import LlamaParse
+import requests 
+from llama_index.llms.openai import OpenAI
+from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core import VectorStoreIndex
 from llama_index.core import Settings
 from llama_index.core import SimpleDirectoryReader
-from llama_index.core import StorageContext
 from llama_index.core import Document
 from llama_index.readers.file import (
     DocxReader,
     PandasExcelReader,
 )
-import pandas
-from tavily import TavilyClient
 
-# Import web search related packages
-from llama_index.core.tools import QueryEngineTool, ToolMetadata
-from llama_index.agent.openai import OpenAIAgent
-from llama_index.core.query_engine import RouterQueryEngine
-import requests
+# Set page config
+st.set_page_config(page_title="Domain Knowledge Augmented LLM Demo", layout="wide")
+st.title("Domain Knowledge Augmented LLM")
+st.subheader("Demo, BAMA, Feb 2025")
 
-import streamlit as st
+st.write("""
+##### This demo is a POC of:
+    1. LLM interacts with user specified documents.
+    2. 3 files are ingested at the same time
+         - PDF, Schwab 2024 Q10
+         - Word, Schwab 2023 Q10 (Converted from PDF to Word)
+         - Excel, A table extracted from Schwab 2022 K10 (page 26)
+         
+##### Due to limitation of hardware (memory, storage, GPU, API), demo is restricted from
+    1. Reasoning(Ambiguous questions)
+    2. Sematic questioning (follow up questions)
+    3. Large model (accuracy, tradeoff between speed and accuracy)
+    4. Fine-tune (optimization)
+    5. Unstable output
+         
 
-#%%
-# Function to perform web search using Tavily API directly
-def web_search(query: str) -> str:
-    if not TAVILY_API_KEY:
-        return "Error: Tavily API key is not set. Please set the TAVILY_API_KEY environment variable."
-    
-    try:
-        client = TavilyClient(api_key=TAVILY_API_KEY)
-        result = client.search(
-            query=query,
-            search_depth="advanced",
-            # topic="news", # news will make it irrelevant, dont use it
-            time_range="y",
-            include_answer="advanced",
-            max_results=5,
+
+* [SEC 10K 2022](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10k_2022.pdf)
+* [SEC 10Q 2023](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10-Q_093023.pdf)
+* [SEC 10Q 2024](https://content.schwab.com/web/retail/public/about-schwab/SEC_Form10Q_093024.pdf)
+         
+""")
+
+import dotenv
+dotenv.load_dotenv()
+
+# API access to llama-cloud
+os.environ["LLAMA_CLOUD_API_KEY"] = os.getenv("LLAMA_CLOUD_API_KEY")
+os.environ["PINECONE_API_KEY"] = os.getenv("PINECONE_API_KEY")
+PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
+
+# Using OpenAI API for embeddings/llms
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+
+os.environ["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY")
+os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")  
+GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")  # from example
+
+os.environ["DEEPSEEK_API_KEY"] = os.getenv("DEEPSEEK_API_KEY")
+DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
+
+
+# Model Selection
+llm_model_options = {
+    "GPT-3.5": ("OpenAI", "gpt-3.5-turbo-0125"),
+    "DeepSeek Reasoner": ("DeepSeek", "deepseek-reasoner"),
+    "Gemini": ("Gemini", "models/gemini-2.0-flash-001")
+}
+
+embed_model_options = {
+    "OpenAI": ("OpenAI", "text-embedding-3-small"),
+    "Gemini": ("Gemini", "models/text-embedding-004")
+}
+
+selected_llm = st.selectbox(
+    "Select LLM Model",
+    options=list(llm_model_options.keys()),
+    key="llm_selection"
+)
+
+selected_embed = st.selectbox(
+    "Select Embedding Model",
+    options=list(embed_model_options.keys()),
+    key="embed_selection"
+)
+
+# Global Settings
+@st.cache_resource
+def initialize_models():
+    # Initialize embedding model
+    embed_provider, embed_model_name = embed_model_options[selected_embed]
+    if embed_provider == "OpenAI":
+        embed_model = OpenAIEmbedding(model=embed_model_name)
+    elif embed_provider == "Gemini":
+        embed_model = GeminiEmbedding(
+            model_name=embed_model_name,
+            api_key=GOOGLE_API_KEY
         )
-        
-        # Extract the answer and search results
-        answer = result.get('answer', '')
-        search_results = result.get('results', [])
-        
-        # Combine the information
-        combined_info = [answer]
-        for res in search_results:
-            combined_info.append(f"- {res.get('title')}: {res.get('content')}")
-        
-        return "\n".join(combined_info)
-    except Exception as e:
-        return f"Error: {str(e)}"
 
-#%%
-# Function to combine RAG and web search results
-def hybrid_search(query):
-    # Get RAG results
-    rag_response = st.session_state.recursive_query_engine.query(query)
-    
-    # Get web search results
-    web_response = web_search(query)
-    
-    # Create tools for the final agent
-    rag_tool = QueryEngineTool(
-        query_engine=st.session_state.recursive_query_engine,
-        metadata=ToolMetadata(
-            name="rag_knowledge",
-            description="Provides information from the local knowledge base"
+    # Initialize LLM
+    llm_provider, model_name = llm_model_options[selected_llm]
+    if llm_provider == "OpenAI":
+        llm = OpenAI(model=model_name)
+    elif llm_provider == "DeepSeek":
+        llm = DeepSeek(
+            model=model_name,
+            api_key=DEEPSEEK_API_KEY
         )
-    )
-    
-    # Create the final agent to combine results
-    final_agent = OpenAIAgent.from_tools(
-        [rag_tool],
-        verbose=True
-    )
-    
-    # Combine the results
-    combined_prompt = f"""
-    Please provide a comprehensive answer based on both local knowledge and web search results:
-    
-    Local Knowledge: {rag_response}
-    Web Search Results: {web_response}
-    
-    Synthesize both sources to provide the most up-to-date and accurate information.
-    If the information from different sources conflicts, prefer more recent sources and explain the discrepancy.
-    """
-    
-    final_response = final_agent.chat(combined_prompt)
-    return final_response
+    elif llm_provider == "Gemini":
+        llm = Gemini(
+            model=model_name,
+            api_key=GOOGLE_API_KEY
+        )
 
-#%%
-# Initialize Streamlit state and configurations first
-st.set_page_config(page_title="Hybrid Search Chatbot", layout="wide")
+    Settings.llm = llm
+    Settings.embed_model = embed_model
+    return llm
 
-# Initialize session state
-if 'initialized' not in st.session_state:
-    st.session_state.initialized = False
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
+llm = initialize_models()
 
-def initialize_services():
-    try:
-        # Initialize vector store
-        vector_store = MilvusVectorStore(
-            uri="https://in03-421d8d9c7f4c34b.serverless.gcp-us-west1.cloud.zilliz.com",
-            token=os.getenv("MILVUS_API_KEY"),
-            collection_name="bama_llm_demo__EMBED_text_embedding_ada_002__LLM_gpt_3P5_turbo_0125",
-            dim=1536,
-        )
-        
-        storage_context = StorageContext.from_defaults(vector_store=vector_store)
-        
-        recursive_index = VectorStoreIndex.from_vector_store(
-            vector_store=vector_store,
-            show_progress=True
-        )
-        
+# Initialize parsers
+@st.cache_resource
+def initialize_parsers():
+    return LlamaParse(result_type="markdown")
 
-#%%
-        from llama_index.postprocessor.flag_embedding_reranker import (
-            # pruning away irrelevant nodes from the context
-            FlagEmbeddingReranker,
-        )
-        reranker = FlagEmbeddingReranker(
-            model="BAAI/bge-reranker-large",
-            top_n=5,
-        )
-        
-        recursive_query_engine = recursive_index.as_query_engine(
-            similarity_top_k=10,
-            node_postprocessors=[reranker],
-            verbose=True,
-            synthesize=True
-        )
-        
-        st.session_state.recursive_query_engine = recursive_query_engine
-        st.session_state.initialized = True
-        return True
-    except Exception as e:
-        st.error(f"Failed to initialize services: {str(e)}")
-        return False
+llama_parser = initialize_parsers()
 
-def main():
-    st.title("Hybrid Search Chatbot")
+# Initialize document readers
+@st.cache_resource
+def initialize_readers():
+    llama_parser = LlamaParse(result_type="markdown")    
+    docx_reader = DocxReader()
     
-    # Add initialization status in sidebar
-    with st.sidebar:
-        st.title("About")
-        st.markdown("""
-        This chatbot combines:
-        - RAG (Retrieval-Augmented Generation)
-        - Web search capabilities
-        - Local knowledge base
-        
-        It provides comprehensive answers by synthesizing information from multiple sources.
-        """)
-        
-        if not st.session_state.initialized:
-            st.warning("⚠️ Services are initializing...")
-        else:
-            st.success("✅ Services initialized")
-    
-    # Initialize services if not already done
-    if not st.session_state.initialized:
-        with st.spinner("Initializing services..."):
-            if not initialize_services():
-                st.error("Failed to initialize services. Please check your API keys and try again.")
-                return
-    
-    # Display chat messages
+    file_extractor = {
+        # Document formats
+        ".pdf": llama_parser,  # Converts PDF to markdown
+        ".docx": docx_reader,
+        ".doc": docx_reader,
+        ".txt": None,  # Default reader for text files
+        ".xlsx": PandasExcelReader(),  # Excel files (newer format)
+        ".xls": PandasExcelReader(),   # Excel files (older format)
+    }
+    return file_extractor
+
+file_extractor = initialize_readers()
+
+import glob
+print(f"Files in './FILES': {glob.glob('./FILES/*')}")
+
+# Add a button to load and process documents
+if st.button("[click] Load and Process Documents (about 5 min)"):
+    with st.spinner("Loading and processing documents..."):
+        try:
+            # Load documents from FILES directory
+            documents = SimpleDirectoryReader(
+                "./FILES", 
+                file_extractor=file_extractor,
+                filename_as_id=True  
+            ).load_data()
+            
+            if documents:
+                st.session_state.documents = documents
+                st.success(f"Successfully loaded {len(documents)} documents from FILES directory")
+            else:
+                st.warning("No documents found in FILES directory")
+        except Exception as e:
+            st.error(f"Error loading documents: {str(e)}")
+
+# Process documents and create index
+if 'documents' in st.session_state:
+    if 'index_created' not in st.session_state:
+        with st.spinner("Processing documents and creating index..."):
+            # Create nodes using both approaches
+            text_splitter = SentenceSplitter(chunk_size=512, chunk_overlap=100)
+            page_nodes = []
+            for doc in st.session_state.documents:
+                text_chunks = text_splitter.split_text(doc.text)
+                for i, chunk in enumerate(text_chunks):
+                    node = TextNode(
+                        text=chunk,
+                        metadata={
+                            "file_name": doc.metadata.get("file_name", ""),
+                            "chunk_index": i,
+                        }
+                    )
+                    page_nodes.append(node)
+
+            # Parse markdown structure
+            node_parser = MarkdownElementNodeParser(llm=llm, num_workers=8)
+            nodes = node_parser.get_nodes_from_documents(st.session_state.documents)
+            base_nodes, objects = node_parser.get_nodes_and_objects(nodes)
+
+            # Combine all nodes
+            all_nodes = base_nodes + objects + page_nodes
+
+            # Create index
+            recursive_index = VectorStoreIndex(all_nodes, show_progress=True)
+            
+            # Create query engine
+            reranker = FlagEmbeddingReranker(
+                model="BAAI/bge-reranker-large",
+                top_n=3,
+            )
+            
+            recursive_query_engine = recursive_index.as_query_engine(
+                similarity_top_k=5,
+                node_postprocessors=[reranker],
+                verbose=True,
+                synthesize=True,
+                response_mode="tree_summarize"
+            )
+            
+            st.session_state.query_engine = recursive_query_engine
+            st.session_state.index_created = True
+            st.success("Index created successfully!")
+
+    # Create the chat interface
+    st.header("Chat with your Documents")
+
+    # Display sample questions
+    st.markdown("""
+    **Sample Questions:**
+    ```
+    - [PDF] How Integration of Ameritrade impact client metrics from 2023 to 2024?
+    - [Excel] Where is the headquarters of schwab and what is its size, including leased and owned
+    - [PDF & Word] Compare Client Metrics of Three Month Ended from 2022, to 2023, to 2024, in numbers, and printout in table
+    - [PDF & Word] Compare Total Net Revenue from 2022, to 2023, to 2024 and printout in table
+    - [Summary] based on Client Metrics of Three Month Ended from 2022, to 2023, to 2024, analyze the business
+    - Compare Total Net Revenue from 2022, to 2023, to 2024 and printout in table
+    ```
+    """)
+
+    # Initialize chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Display chat messages from history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-    
-    # Chat input
-    if prompt := st.chat_input("What would you like to know?"):
-        if not st.session_state.initialized:
-            st.error("Services are not initialized. Please wait or refresh the page.")
-            return
             
-        # Add user message to chat history
+            # Display citations if available
+            if message.get('citations'):
+                st.markdown('---')
+                with st.expander("📚 Source Citations"):
+                    for i, citation in enumerate(message['citations'], 1):
+                        # Validate citation structure
+                        if not isinstance(citation, dict) or not (citation.get('url') or citation.get('text')):
+                            continue
+                        
+                        try:
+                            st.markdown(f"### Source {i}")
+                            if citation.get('url'):
+                                st.markdown(f"🔗 [Open Document]({citation['url']})")
+                            if citation.get('text'):
+                                st.markdown(f"**Excerpt:** {citation['text']}")
+                            if citation.get('metadata'):
+                                st.markdown(f"**Metadata:** {citation['metadata']}")
+                            st.markdown("---")
+                        except Exception as e:
+                            st.error(f"Error displaying citation: {str(e)}")
+                            continue
+
+    # Accept user input
+    if prompt := st.chat_input("Ask a question about your documents"):
+        # Display user message in chat message container
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
-        
-        # Get bot response
-        with st.chat_message("assistant"):
-            try:
-                with st.spinner("Thinking..."):
-                    response = hybrid_search(prompt)
-                    st.markdown(response)
-                    st.session_state.messages.append({"role": "assistant", "content": str(response)})
-            except Exception as e:
-                error_message = f"An error occurred while processing your request: {str(e)}"
-                st.error(error_message)
-                st.session_state.messages.append({"role": "assistant", "content": error_message})
 
-if __name__ == "__main__":
-    main()
+        # Display assistant response in chat message container
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                # Get response with source nodes
+                response = st.session_state.query_engine.query(prompt)
+                st.markdown(response.response)
+                
+                # Extract source nodes and format as citations
+                citations = []
+                if hasattr(response, 'source_nodes'):
+                    for node in response.source_nodes:
+                        citation = {
+                            'text': node.node.text[:500] + "..." if len(node.node.text) > 500 else node.node.text,
+                            'metadata': f"Relevance Score: {node.score:.2f}"
+                        }
+                        if hasattr(node.node, 'metadata') and node.node.metadata:
+                            file_name = node.node.metadata.get('file_name', '')
+                            if file_name:
+                                citation['metadata'] = f"{citation['metadata']} | File: {file_name}"
+                        citations.append(citation)
+                
+                # Display citations immediately
+                if citations:
+                    st.markdown('---')
+                    with st.expander("📚 Source Citations"):
+                        for i, citation in enumerate(citations, 1):
+                            st.markdown(f"### Source {i}")
+                            st.markdown(f"**Excerpt:** {citation['text']}")
+                            st.markdown(f"**{citation['metadata']}**")
+                            st.markdown("---")
+                
+                # Add response with citations to messages
+                message = {
+                    "role": "assistant",
+                    "content": response.response,
+                }
+                if citations:
+                    message["citations"] = citations
+                st.session_state.messages.append(message)
+
+else:
+    st.info("Please load the documents first by clicking the 'Load and Process Documents' button above.")
