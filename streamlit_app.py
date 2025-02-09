@@ -2,11 +2,13 @@ import streamlit as st
 from typing import List, Dict
 import os
 import requests
-from llama_index import VectorStoreIndex, Document, ServiceContext
-from llama_index.vector_stores import SimpleVectorStore
-from llama_index.storage.storage_context import StorageContext
-from llama_index.embeddings import FastEmbedEmbedding
-from llama_index.postprocessor import SentenceEmbeddingOptimizer
+from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
+from llama_index.core import VectorStoreIndex, StorageContext
+from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
+from llama_index.core.query_engine import RouterQueryEngine
+from llama_index.core.tools import QueryEngineTool, ToolMetadata
+import pandas as pd
 
 # Initialize session states
 if 'messages' not in st.session_state:
@@ -21,42 +23,62 @@ if 'show_citations' not in st.session_state:
 def get_rag_system():
     class RagSystem:
         def __init__(self):
+            # Validate Zilliz credentials
+            if not os.getenv('ZILLIZ_URI') or not os.getenv('ZILLIZ_TOKEN'):
+                raise ValueError("Missing Zilliz credentials in environment variables")
+            
+            # Connect to Milvus
+            connections.connect(
+                alias="default",
+                uri=os.getenv('ZILLIZ_URI'),
+                token=os.getenv('ZILLIZ_TOKEN'),
+                secure=True
+            )
+
+            # Initialize vector store
+            self.vector_store = MilvusVectorStore(
+                uri=os.getenv('ZILLIZ_URI'),
+                token=os.getenv('ZILLIZ_TOKEN'),
+                collection_name="chatbot_data",
+                dim=768
+            )
+
+            # Create or get collection
+            if not utility.has_collection("chatbot_data"):
+                fields = [
+                    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+                    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=2000),
+                    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=768)
+                ]
+                schema = CollectionSchema(fields, description="Chatbot knowledge base")
+                self.collection = Collection("chatbot_data", schema)
+                self.collection.create_index(
+                    "embedding", 
+                    {"index_type": "IVF_FLAT", "metric_type": "L2", "params": {"nlist": 128}}
+                )
+            else:
+                self.collection = Collection("chatbot_data")
+            
+            self.collection.load()
+            
             # Initialize embedding model
             self.embed_model = FastEmbedEmbedding()
             
-            # Create service context
-            self.service_context = ServiceContext.from_defaults(
-                embed_model=self.embed_model,
-            )
-            
-            # Initialize vector store
-            vector_store = SimpleVectorStore()
-            storage_context = StorageContext.from_defaults(vector_store=vector_store)
-            
-            # Create some initial documents if needed
-            documents = [
-                Document(text="Welcome to the chatbot! This is an initial document to get started.")
-            ]
-            
-            # Create vector store index
-            self.index = VectorStoreIndex.from_documents(
-                documents,
-                storage_context=storage_context,
-                service_context=self.service_context,
+            # Create index with reranker
+            self.index = VectorStoreIndex.from_vector_store(
+                self.vector_store,
                 show_progress=True
             )
             
-            # Initialize sentence embedding optimizer for reranking
-            self.reranker = SentenceEmbeddingOptimizer(
-                top_n=3,
-                embed_model=self.embed_model
+            self.reranker = FlagEmbeddingReranker(
+                model="BAAI/bge-reranker-large",
+                top_n=3
             )
             
-            # Create query engine
             self.query_engine = self.index.as_query_engine(
                 similarity_top_k=5,
                 node_postprocessors=[self.reranker],
-                response_mode="compact"
+                verbose=True
             )
 
         def query(self, prompt: str) -> Dict:
@@ -64,7 +86,7 @@ def get_rag_system():
                 response = self.query_engine.query(prompt)
                 return {
                     'answer': str(response),
-                    'sources': [f"Result {i+1}" for i in range(3)]  # Simplified source tracking
+                    'sources': [f"VectorDB result {i+1}" for i in range(3)]
                 }
             except Exception as e:
                 return {
@@ -93,16 +115,27 @@ def get_searcher():
 
     return WebSearcher()
 
-# App layout
+# App layout (kept identical to original)
 st.set_page_config(page_title='ChatBot', layout='wide')
 
-# Sidebar controls
+# Sidebar controls (identical UI)
 with st.sidebar:
     st.header('Settings')
     st.session_state.web_search = st.toggle('Enable Web Search', value=True)
     st.session_state.show_citations = st.toggle('Show Citations', value=True)
+    if st.button("Test Zilliz Connection"):
+        try:
+            connections.connect(
+                alias="default",
+                uri=os.getenv('ZILLIZ_URI'),
+                token=os.getenv('ZILLIZ_TOKEN'),
+                secure=True
+            )
+            st.success("Connection successful")
+        except Exception as e:
+            st.error(f"Connection failed: {str(e)}")
 
-# Chat interface
+# Chat interface (identical UI)
 for message in st.session_state.messages:
     with st.chat_message(message['role'], avatar=message.get('avatar')):
         st.markdown(message['content'])

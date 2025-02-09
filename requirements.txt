@@ -1,4 +1,9 @@
 streamlit
-llama-index==0.9.48
+pymilvus
+llama-index-core==0.12.14
+llama-index-embeddings-fastembed==0.3.1
+llama-index-postprocessor-flag-embedding-reranker==0.3.0
+pandas
 requests
 python-dotenv
+tavily-python==0.5.1
