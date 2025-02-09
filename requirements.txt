@@ -47,7 +47,7 @@ FlagEmbedding @ git+https://github.com/FlagOpen/FlagEmbedding.git@cbf98a6140713f
 flatbuffers==25.1.24
 fonttools==4.55.3
 frozenlist==1.5.0
-fsspec==2024.3.1
+# fsspec==2024.3.1
 # gcsfs==2024.10.0
 google-ai-generativelanguage==0.6.15
 google-api-core==2.24.0
@@ -63,9 +63,9 @@ google-generativeai==0.8.4
 google-resumable-media==2.7.2
 googleapis-common-protos==1.66.0
 greenlet==3.1.1
-grpcio==1.67.1
-grpcio-status==1.68.1
-grpcio-tools==1.70.0
+# grpcio==1.67.1
+# grpcio-status==1.68.1
+# grpcio-tools==1.70.0
 h11==0.14.0
 h2==4.2.0
 hpack==4.1.0
@@ -116,10 +116,10 @@ llama-index-program-openai==0.3.1
 llama-index-question-gen-openai==0.3.0
 llama-index-readers-file==0.4.3
 llama-index-readers-llama-parse==0.4.0
-llama-index-vector-stores-chroma==0.4.1
+# llama-index-vector-stores-chroma==0.4.1
 llama-index-vector-stores-milvus==0.5.0
-llama-index-vector-stores-pinecone==0.4.2
-llama-index-vector-stores-qdrant==0.4.3
+# llama-index-vector-stores-pinecone==0.4.2
+# llama-index-vector-stores-qdrant==0.4.3
 llama-parse==0.5.19
 llamaindex-py-client==0.1.19
 llvmlite==0.44.0
