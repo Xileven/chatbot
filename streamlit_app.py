@@ -2,10 +2,9 @@ import streamlit as st
 from typing import List, Dict
 import os
 import requests
-from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+from llama_index.core import VectorStoreIndex, SimpleVectorStore, Document
+from llama_index.core.storage.storage_context import StorageContext
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
-from llama_index.core import VectorStoreIndex
-from llama_index.vector_stores.milvus import MilvusVectorStore
 from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
 
 # Initialize session states
@@ -21,54 +20,23 @@ if 'show_citations' not in st.session_state:
 def get_rag_system():
     class RagSystem:
         def __init__(self):
-            # Validate environment variables first
-            if not os.getenv('ZILLIZ_URI') or not os.getenv('ZILLIZ_TOKEN'):
-                raise ValueError("Missing Zilliz credentials in environment variables")
-            
-            # Connect using Zilliz Cloud format
-            connections.connect(
-                alias="default",
-                uri=os.getenv('ZILLIZ_URI'),
-                token=os.getenv('ZILLIZ_TOKEN'),
-                secure=True
-            )
-            
             # Initialize vector store
-            self.vector_store = MilvusVectorStore(
-                uri=os.getenv('ZILLIZ_URI'),
-                token=os.getenv('ZILLIZ_TOKEN'),
-                collection_name="chatbot_data",
-                dim=768  # FastEmbed dimension
-            )
-            
-            # Create or get collection
-            if not utility.has_collection("chatbot_data"):
-                fields = [
-                    FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-                    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=2000),
-                    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=768)
-                ]
-                schema = CollectionSchema(fields, description="Chatbot knowledge base")
-                self.collection = Collection("chatbot_data", schema)
-                
-                # Create index
-                index_params = {
-                    "index_type": "IVF_FLAT",
-                    "metric_type": "L2",
-                    "params": {"nlist": 128}
-                }
-                self.collection.create_index("embedding", index_params)
-            else:
-                self.collection = Collection("chatbot_data")
-            
-            self.collection.load()
+            vector_store = SimpleVectorStore()
+            storage_context = StorageContext.from_defaults(vector_store=vector_store)
             
             # Initialize embedding model
             self.embed_model = FastEmbedEmbedding()
             
+            # Create some initial documents if needed
+            documents = [
+                Document(text="Welcome to the chatbot! This is an initial document to get started.")
+            ]
+            
             # Create vector store index
-            self.index = VectorStoreIndex.from_vector_store(
-                vector_store=self.vector_store,
+            self.index = VectorStoreIndex.from_documents(
+                documents,
+                storage_context=storage_context,
+                embed_model=self.embed_model,
                 show_progress=True
             )
             
@@ -83,7 +51,7 @@ def get_rag_system():
                 similarity_top_k=5,
                 node_postprocessors=[self.reranker],
                 verbose=True,
-                synthesize=True
+                response_mode="compact"
             )
 
         def query(self, prompt: str) -> Dict:
@@ -91,7 +59,7 @@ def get_rag_system():
                 response = self.query_engine.query(prompt)
                 return {
                     'answer': str(response),
-                    'sources': [f"VectorDB result {i+1}" for i in range(3)]  # Simplified source tracking
+                    'sources': [f"Result {i+1}" for i in range(3)]  # Simplified source tracking
                 }
             except Exception as e:
                 return {
@@ -120,18 +88,6 @@ def get_searcher():
 
     return WebSearcher()
 
-def validate_zilliz_connection():
-    try:
-        connections.connect(
-            alias="default",
-            uri=os.getenv('ZILLIZ_URI'),
-            token=os.getenv('ZILLIZ_TOKEN'), 
-            secure=True
-        )
-        return True, "Connection successful"
-    except Exception as e:
-        return False, f"Connection failed: {str(e)}"
-
 # App layout
 st.set_page_config(page_title='ChatBot', layout='wide')
 
@@ -140,17 +96,6 @@ with st.sidebar:
     st.header('Settings')
     st.session_state.web_search = st.toggle('Enable Web Search', value=True)
     st.session_state.show_citations = st.toggle('Show Citations', value=True)
-    if st.button("Test Zilliz Connection"):
-        success, message = validate_zilliz_connection()
-        if success:
-            st.success(message)
-        else:
-            st.error(message)
-            st.markdown("""
-                **Required format:**  
-                `ZILLIZ_URI=https://[cluster-id].api.[region].zillizcloud.com`  
-                `ZILLIZ_TOKEN=your_db_token`
-            """)
 
 # Chat interface
 for message in st.session_state.messages:
