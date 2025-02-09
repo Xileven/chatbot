@@ -56,22 +56,14 @@ def get_rag_system():
             self.embed_model = FastEmbedEmbedding()
 
             if self.collection.is_empty:
-                test_contents = [
-                    "Sample chat history 1: User preferences",
-                    "Sample chat history 2: FAQ responses",
-                    "Sample chat history 3: Troubleshooting guide"
-                ]
-                embeddings = [
-                    self.embed_model.get_text_embedding(text)
-                    for text in test_contents
-                ]
                 test_data = [
-                    {"content": text, "embedding": emb}
-                    for text, emb in zip(test_contents, embeddings)
+                    {"content": "Sample chat history 1: User preferences"},
+                    {"content": "Sample chat history 2: FAQ responses"},
+                    {"content": "Sample chat history 3: Troubleshooting guide"}
                 ]
                 self.collection.insert(test_data)
                 self.collection.flush()
-                st.toast("Inserted 3 test documents with embeddings", icon="📄")
+                st.toast("Inserted 3 test documents", icon="📄")
 
         def query(self, prompt: str) -> Dict:
             query_embedding = self.embed_model.get_text_embedding(prompt)
