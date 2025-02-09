@@ -114,14 +114,14 @@ def web_search(query: str) -> str:
 # Function to combine RAG and web search results
 def hybrid_search(query):
     # Get RAG results
-    rag_response = recursive_query_engine.query(query)
+    rag_response = st.session_state.recursive_query_engine.query(query)
     
     # Get web search results
     web_response = web_search(query)
     
     # Create tools for the final agent
     rag_tool = QueryEngineTool(
-        query_engine=recursive_query_engine,
+        query_engine=st.session_state.recursive_query_engine,
         metadata=ToolMetadata(
             name="rag_knowledge",
             description="Provides information from the local knowledge base"
@@ -149,91 +149,61 @@ def hybrid_search(query):
     return final_response
 
 #%%
-# ====================================================================================================
-print ("load Index Ready nodes from Milvus")
-# ====================================================================================================
-#%%
-vector_store = MilvusVectorStore(
-    uri="https://in03-421d8d9c7f4c34b.serverless.gcp-us-west1.cloud.zilliz.com",
-    token=MILVUS_API_KEY,
-    collection_name="bama_llm_demo__EMBED_text_embedding_ada_002__LLM_gpt_3P5_turbo_0125",
-    dim=1536,  # 1536 is default dim for OpenAI
+# Initialize Streamlit state and configurations first
+st.set_page_config(page_title="Hybrid Search Chatbot", layout="wide")
 
-)
+# Initialize session state
+if 'initialized' not in st.session_state:
+    st.session_state.initialized = False
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
 
-storage_context = StorageContext.from_defaults(vector_store=vector_store)
-
-recursive_index = VectorStoreIndex.from_vector_store(
-            vector_store = vector_store,
-            # storage_context = storage_context,
+def initialize_services():
+    try:
+        # Initialize vector store
+        vector_store = MilvusVectorStore(
+            uri="https://in03-421d8d9c7f4c34b.serverless.gcp-us-west1.cloud.zilliz.com",
+            token=os.getenv("MILVUS_API_KEY"),
+            collection_name="bama_llm_demo__EMBED_text_embedding_ada_002__LLM_gpt_3P5_turbo_0125",
+            dim=1536,
+        )
+        
+        storage_context = StorageContext.from_defaults(vector_store=vector_store)
+        
+        recursive_index = VectorStoreIndex.from_vector_store(
+            vector_store=vector_store,
             show_progress=True
-            )
-
+        )
+        
 
 #%%
-from llama_index.postprocessor.flag_embedding_reranker import (
-    # pruning away irrelevant nodes from the context
-    FlagEmbeddingReranker,
-)
-reranker = FlagEmbeddingReranker(
-                                model="BAAI/bge-reranker-large",
-                                top_n=5,
-)
+        from llama_index.postprocessor.flag_embedding_reranker import (
+            # pruning away irrelevant nodes from the context
+            FlagEmbeddingReranker,
+        )
+        reranker = FlagEmbeddingReranker(
+            model="BAAI/bge-reranker-large",
+            top_n=5,
+        )
+        
+        recursive_query_engine = recursive_index.as_query_engine(
+            similarity_top_k=10,
+            node_postprocessors=[reranker],
+            verbose=True,
+            synthesize=True
+        )
+        
+        st.session_state.recursive_query_engine = recursive_query_engine
+        st.session_state.initialized = True
+        return True
+    except Exception as e:
+        st.error(f"Failed to initialize services: {str(e)}")
+        return False
 
-recursive_query_engine = recursive_index.as_query_engine(
-                                        similarity_top_k=10, 
-                                        node_postprocessors=[reranker], 
-                                        verbose=True,
-                                        synthesize=True
-)
-
-
-
-# %%
-# Example query using hybrid search
-# query = "Compare Client Metrics of Three Month Ended from 2022, to 2023, to 2024, in numbers, and printout in table"
-query = "Summarize how Scharle Schwab Bank doing in 2024"
-rag_response = recursive_query_engine.query(query)
-print("====================================RAG Response====================================")
-print(rag_response)
-
-print("====================================Hybrid Response====================================")
-hybrid_response = hybrid_search(query)
-print(hybrid_response)
-
-
-# %%
 def main():
-    # Initialize session state for chat history if it doesn't exist
-    if 'messages' not in st.session_state:
-        st.session_state.messages = []
-
-    # Set up the Streamlit page
-    st.set_page_config(page_title="Hybrid Search Chatbot", layout="wide")
     st.title("Hybrid Search Chatbot")
-
-    # Display chat messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # Chat input
-    if prompt := st.chat_input("What would you like to know?"):
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Get bot response
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                response = hybrid_search(prompt)
-                st.markdown(response)
-                
-        # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": str(response)})
-
-    # Add a sidebar with information
+    
+    # Add initialization status in sidebar
     with st.sidebar:
         st.title("About")
         st.markdown("""
@@ -244,6 +214,46 @@ def main():
         
         It provides comprehensive answers by synthesizing information from multiple sources.
         """)
+        
+        if not st.session_state.initialized:
+            st.warning("⚠️ Services are initializing...")
+        else:
+            st.success("✅ Services initialized")
+    
+    # Initialize services if not already done
+    if not st.session_state.initialized:
+        with st.spinner("Initializing services..."):
+            if not initialize_services():
+                st.error("Failed to initialize services. Please check your API keys and try again.")
+                return
+    
+    # Display chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("What would you like to know?"):
+        if not st.session_state.initialized:
+            st.error("Services are not initialized. Please wait or refresh the page.")
+            return
+            
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Get bot response
+        with st.chat_message("assistant"):
+            try:
+                with st.spinner("Thinking..."):
+                    response = hybrid_search(prompt)
+                    st.markdown(response)
+                    st.session_state.messages.append({"role": "assistant", "content": str(response)})
+            except Exception as e:
+                error_message = f"An error occurred while processing your request: {str(e)}"
+                st.error(error_message)
+                st.session_state.messages.append({"role": "assistant", "content": error_message})
 
 if __name__ == "__main__":
     main()
