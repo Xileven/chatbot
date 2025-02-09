@@ -26,19 +26,19 @@ print ("load API keys")
 # ====================================================================================================
 import os
 # API access to llama-cloud
-os.environ["LLAMA_CLOUD_API_KEY"] = os.getenv("LLAMA_CLOUD_API_KEY")
+# os.environ["LLAMA_CLOUD_API_KEY"] = os.getenv("LLAMA_CLOUD_API_KEY")
 os.environ["MILVUS_API_KEY"] = os.getenv("ZILLIZ_API_KEY")
 MILVUS_API_KEY = os.getenv('ZILLIZ_API_KEY')
 
 # Using OpenAI API for embeddings/llms
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+# os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
-os.environ["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY")
-os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")  
-GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")  # from example
+# os.environ["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY")
+# os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")  
+# GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")  # from example
 
-os.environ["DEEPSEEK_API_KEY"] = os.getenv("DEEPSEEK_API_KEY")
-DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
+# os.environ["DEEPSEEK_API_KEY"] = os.getenv("DEEPSEEK_API_KEY")
+# DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
 
 # Tavily API key
 os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY")
@@ -90,8 +90,8 @@ def web_search(query: str) -> str:
         result = client.search(
             query=query,
             search_depth="advanced",
-            topic="news",
-            time_range="w",
+            # topic="news", # news will make it irrelevant, dont use it
+            time_range="y",
             include_answer="advanced",
             max_results=5,
         )
@@ -190,7 +190,8 @@ recursive_query_engine = recursive_index.as_query_engine(
 
 # %%
 # Example query using hybrid search
-query = "Compare Client Metrics of Three Month Ended from 2022, to 2023, to 2024, in numbers, and printout in table"
+# query = "Compare Client Metrics of Three Month Ended from 2022, to 2023, to 2024, in numbers, and printout in table"
+query = "Summarize how Scharle Schwab Bank doing in 2024"
 rag_response = recursive_query_engine.query(query)
 print("====================================RAG Response====================================")
 print(rag_response)
@@ -199,3 +200,5 @@ print("====================================Hybrid Response======================
 hybrid_response = hybrid_search(query)
 print(hybrid_response)
 
+
+# %%
