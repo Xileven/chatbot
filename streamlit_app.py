@@ -4,6 +4,9 @@ import os
 import requests
 from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
+from llama_index.core import VectorStoreIndex
+from llama_index.vector_stores.milvus import MilvusVectorStore
+from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
 
 # Initialize session states
 if 'messages' not in st.session_state:
@@ -25,14 +28,20 @@ def get_rag_system():
             # Connect using Zilliz Cloud format
             connections.connect(
                 alias="default",
-                uri=os.getenv('ZILLIZ_URI'),  # Should be "https://xxx.api.region.zillizcloud.com"
+                uri=os.getenv('ZILLIZ_URI'),
                 token=os.getenv('ZILLIZ_TOKEN'),
                 secure=True
             )
             
-            from pymilvus import FieldSchema, CollectionSchema, DataType
-
-            # Check collection existence
+            # Initialize vector store
+            self.vector_store = MilvusVectorStore(
+                uri=os.getenv('ZILLIZ_URI'),
+                token=os.getenv('ZILLIZ_TOKEN'),
+                collection_name="chatbot_data",
+                dim=768  # FastEmbed dimension
+            )
+            
+            # Create or get collection
             if not utility.has_collection("chatbot_data"):
                 fields = [
                     FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
@@ -53,22 +62,42 @@ def get_rag_system():
                 self.collection = Collection("chatbot_data")
             
             self.collection.load()
+            
+            # Initialize embedding model
             self.embed_model = FastEmbedEmbedding()
+            
+            # Create vector store index
+            self.index = VectorStoreIndex.from_vector_store(
+                vector_store=self.vector_store,
+                show_progress=True
+            )
+            
+            # Initialize reranker
+            self.reranker = FlagEmbeddingReranker(
+                model="BAAI/bge-reranker-large",
+                top_n=3
+            )
+            
+            # Create query engine
+            self.query_engine = self.index.as_query_engine(
+                similarity_top_k=5,
+                node_postprocessors=[self.reranker],
+                verbose=True,
+                synthesize=True
+            )
 
         def query(self, prompt: str) -> Dict:
-            query_embedding = self.embed_model.get_text_embedding(prompt)
-            search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
-            results = self.collection.search(
-                data=[query_embedding],
-                anns_field="embedding",
-                param=search_params,
-                limit=3,
-                output_fields=["content"]
-            )
-            return {
-                'answer': '\n'.join([hit.entity.get('content') for hit in results[0]]),
-                'sources': [f"VectorDB result {i+1}" for i in range(len(results[0]))]
-            }
+            try:
+                response = self.query_engine.query(prompt)
+                return {
+                    'answer': str(response),
+                    'sources': [f"VectorDB result {i+1}" for i in range(3)]  # Simplified source tracking
+                }
+            except Exception as e:
+                return {
+                    'answer': f"Error occurred: {str(e)}",
+                    'sources': []
+                }
 
     return RagSystem()
 
